@@ -1,0 +1,427 @@
+<?php
+
+/*
+  Resource:
+  https://support.payeezy.com/hc/en-us/articles/203992129-First-Data-Payeezy-Gateway-Hosted-Payment-Pages-Integration-Manual#10
+*/
+
+/*test url:
+http://localhost/php_tests/payment_template/make_payment.php?firstname=Bruce&lastname=Wayne&email=tqnguyen15@uh.edu&phone=555-666-1234&address=123%20St&city=Houston&state=TX&zip=77809&country=USA&item_id=1&item_title=Batmobile%20thingy&item_description=thingy%20does%20something%20interesting&unit_price=22509.43&quantity=8
+*/
+
+/* Include php in the CMS using:
+  <!--#START-CODE
+  <?php include "/path/to/somefile.php"; ?>
+  #END-CODE—>
+
+OR
+
+<!--#START-CODE
+<?
+  php echo "some php code";
+?>
+#END-CODE—>
+
+*/
+
+//Constants required for the payment page
+define ('CURRENCY_CODE','USD');
+define ('PAYMENT_URL', 'https://checkout.globalgatewaye4.firstdata.com/pay');
+define ('IS_TEST', 'FALSE');
+
+
+/**********************************************************************/
+/* Information needed here !!!!! CHANGE THESE 3 VALUES TO YOUR OWN!!! */
+/* DON'T FORGET TO CHANGE ME!!! */
+/**********************************************************************/
+define ('LOGIN','WSP-UNIVE-gZJnpwC6XA');
+define ('TRANSACTION_KEY','R3vUImy~ShW2_Ce7GkLW');
+define ('RESPONSE_KEY','r3OYQfYQryFycHt3hkEv');
+/**********************************************************************/
+/**********************************************************************/
+
+//store the GET/POST parameters
+$F = $_GET;
+
+//values posted to payment gateway.  We could have just used the defined constants also.
+$x_login = LOGIN;
+$transaction_key = TRANSACTION_KEY;
+$x_currency_code = CURRENCY_CODE;
+
+srand(time()); // initialize random generator for x_fp_sequence
+$x_fp_sequence = rand(1000, 100000) + 123; //this can be changed to whatever you want, but must be a number
+$x_fp_timestamp = time(); // needs to be in UTC. Make sure webserver produces UTC
+
+//Data from the GET/POST.  Array element keys are place holders, substitute with the keys sent in GET/POST string
+$unit_price = $F['unit_price'];
+$unit_price = preg_replace('/[\$,]/', '', $unit_price);
+$unit_price = floatval($unit_price);
+$item_id = $F['item_id'];
+$item_title = $F['item_title'];
+$item_description = $F['item_description']; //THIS IS WHAT THE PAYEE WILL SEE ON THE GATEWAY PAGE UNDER THE "Item" column
+$quantity = $F['quantity'];
+$taxable = "N";
+$product_code = "";
+$commodity_code = "";
+$unit_of_measure = "each";
+$discount_indicator = "";
+$discount_amount = 0;
+
+//User information from GET/POST
+$x_first_name = $F['firstname'];
+$x_last_name = $F['lastname'];
+$x_phone = $F['phone'];
+$x_email = $F['email'];
+$x_address = $F['address'];
+$x_city = $F['city'];
+$x_state = $F['state'];
+$x_zip = $F['zip'];
+$x_country = $F['country'];
+$event = $F['event'];
+
+
+
+$x_invoice_num = $event; //UPDATE AS PREFERRED. HIS HAS A MAX LENGTH OF 20 CHARACTERS.
+
+
+//simple item total calculation that assumes NO discount or tax considered.
+$item_total = $unit_price * $quantity;
+
+
+$x_amount = $item_total; //this assumes there is only one line item.  The x_amount should be the total of ALL line items if more than one.
+
+//format the line items to be displayed on the payment page. The format is:
+//Item ID<|>Item Title<|>Item Description<|>Quantity<|>Unit Price<|>Taxable (Y or N)<|>Product Code<|>Commodity Code<|>Unit of Measure<|>Tax Rate<|>Tax Type<|>Tax Amount<|>Discount Indicator<|>Discount Amount<|>Line Item Total
+$line_item =  "$item_id<|>";
+$line_item .= "$item_title<|>";
+$line_item .= "$item_description<|>";
+$line_item .= "$quantity<|>";
+$line_item .= "$unit_price<|>";
+$line_item .= "$taxable<|>";
+$line_item .= "$product_code<|>";
+$line_item .= "$commodity_code<|>";
+$line_item .= "$unit_of_measure<|>";
+$line_item .= "$tax_rate<|>";
+$line_item .= "$tax_type<|>";
+$line_item .= "$tax_amount<|>";
+$line_item .= "$discount_indicator<|>";
+$line_item .= "$discount_amount<|>";
+$line_item .= "$item_total";
+
+
+// The values that contribute to x_fp_hash
+/*
+  x_fp_hash is calculated as the HMAC-MD5 from the Transaction Key of the Payeezy Gateway Payment Page with a given x_login and the string"x_login^x_fp_sequence^x_fp_timestamp^x_amount^" with the particular values replaced.
+*/
+$hmac_data = $x_login . "^" . $x_fp_sequence . "^" . $x_fp_timestamp . "^" . $x_amount . "^" . $x_currency_code;
+$x_fp_hash = hash_hmac('MD5', $hmac_data, $transaction_key);
+
+//pass the logo url to the payment page
+//put your logo here if you would like
+
+//The receipt link
+$x_receipt_link_url = "https://ssl.uh.edu/honors/";
+//$x_receipt_link_url = "http://192.168.56.1/php_tests/payment_template/confirmation.php"; //another test receipt link
+
+?>
+
+<!--Summary information about the product -->
+<div id="order">
+                <table cellpadding="0" cellspacing="0" summary="Order Summary" class="detailedsummary" width="100%">
+      <thead>
+        <tr>
+          <th>Quantity</th>
+          <th class="item">Item</th>
+          <th class="unit">Unit</th>
+          <th class="amount" colspan="2">Price</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr>
+            <td class="quantity"><?= $quantity ?></td>
+            <td class="item"><?= $item_description ?></td>
+            <td class="unit">$<?= number_format($unit_price, 2, '.', ''); ?></td>
+            <td class="currency">USD</td>
+            <td class="amount"><?= $item_total ?></td>
+	        </tr>
+        </tbody>
+        <tfoot>
+            
+          <tr>
+            <td colspan="2"></td>
+              <td class="total">Total</td>
+            <td class="total currency">USD</td>
+
+            <td class="total amount"><?= $x_amount ?></td>
+         </tr>
+        </tfoot>
+     </table>
+
+
+    </div>
+
+    <form method="post" action="<?= PAYMENT_URL ?>" class="form-horizontal">
+      <!-- HIDDEN FIELDS THAT ARE POSTED TO THE PAYMENT GATEWAY -->
+      <input type="hidden" name="x_login" value="<?= $x_login ?>"/>
+      <input type="hidden" name="x_fp_sequence" value="<?= $x_fp_sequence ?>"/>
+      <input type="hidden" name="x_fp_timestamp" value="<?= $x_fp_timestamp ?>"/>
+      <input type="hidden" name="x_fp_hash" value="<?= $x_fp_hash ?>" />
+      <input type="hidden" name="x_currency_code" value="<?= $x_currency_code ?>" />
+      <input type="hidden" name="x_invoice_num" value="<?= $x_invoice_num; ?>"/> <!-- Optional reference number for the order, easily searchable in terminal -->
+      <input type="hidden" name="x_show_form" value="PAYMENT_FORM"/>
+      <input type="hidden" name="x_tax" value="<?= $tax_amount ?>" />
+      <input type="hidden" name="x_amount" value="<?= $x_amount ?>"/>
+      <input type="hidden" name="x_test_request" value="<?= IS_TEST ?>" />
+
+      <!-- CHANGE THIS TO HIDDEN LATER, IT IS DISPLAYED FOR LEARNING PURPOSES HERE -->
+      <input type="hidden" name="x_line_item" style="width:100%" value="<?= $line_item ?>"/> <!--repeat this line for each lineitem-->
+      <input type="hidden" name="x_logo_url" value="<?= $uh_logo_url ?>"/> <!-- Send the logo url to them -->
+
+
+      <input type="hidden" name="x_receipt_link_url" value="<?= $x_receipt_link_url ?>"/> <!-- Send the receipt url to them. This element is optional, but if it is not present, then it should be set in the payment page of First Data. -->
+
+
+      <!-- USER INFO TO PRE-POPULATE THE PAYMENT PAGE -->
+<fieldset><!-- Form Name --><legend>Please Enter your Billing Information</legend> <!-- Text input-->
+<div class="form-group"><label class="col-md-4 control-label" for="x_first_name">First Name</label>
+<div class="col-md-4"><input class="form-control input-md" id="x_first_name" name="x_first_name" required="" type="text" value="<?= $x_first_name ?>"/></div>
+</div>
+<!-- Text input-->
+<div class="form-group"><label class="col-md-4 control-label" for="x_last_name">Last Name</label>
+<div class="col-md-4"><input class="form-control input-md" id="x_last_name" name="x_last_name" required="" type="text" value="<?= $x_last_name ?>"/></div>
+</div>
+<!-- Text input-->
+<div class="form-group"><label class="col-md-4 control-label" for="x_phone">Phone</label>
+<div class="col-md-4"><input class="form-control input-md" id="x_phone" name="x_phone" required="" type="text" value="<?= $x_phone ?>"/> <span class="help-block">(xxx) xxx-xxxx</span></div>
+</div>
+<!-- Text input-->
+<div class="form-group"><label class="col-md-4 control-label" for="x_email">Email</label>
+<div class="col-md-4"><input class="form-control input-md" id="x_email" name="x_email" required="" type="text" value="<?= $x_email ?>"/></div>
+</div>
+<!-- Text input-->
+<div class="form-group"><label class="col-md-4 control-label" for="x_address">Address</label>
+<div class="col-md-4"><input class="form-control input-md" id="x_address" name="x_address" required="" type="text" value="<?= $x_address ?>"/></div>
+</div>
+<!-- Text input-->
+<div class="form-group"><label class="col-md-4 control-label" for="x_city">City</label>
+<div class="col-md-4"><input class="form-control input-md" id="x_city" name="x_city" required="" type="text" value="<?= $x_city ?>"/></div>
+</div>
+<!-- Text input-->
+<div class="form-group"><label class="col-md-4 control-label" for="x_state">State</label>
+<div class="col-md-4"><input class="form-control input-md" id="x_state" name="x_state" required="" type="text" value="<?= $x_state ?>"/></div>
+</div>
+<!-- Text input-->
+<div class="form-group"><label class="col-md-4 control-label" for="x_zip">Zip</label>
+<div class="col-md-4"><input class="form-control input-md" id="x_zip" name="x_zip" required="" type="text" value="<?= $x_zip ?>"/></div>
+</div>
+<!-- Select Basic -->
+<div class="form-group"><label class="col-md-4 control-label" for="x_country">Country</label>
+<div class="col-md-4"><select class="form-control" id="x_country" name="x_country" value="<?= $x_country ?>">
+<option value="United States">United States</option>
+<option value="-----------------">-----------------</option>
+<option value="Afghanistan">Afghanistan</option>
+<option value="Albania">Albania</option>
+<option value="Algeria">Algeria</option>
+<option value="Andorra">Andorra</option>
+<option value="Angola">Angola</option>
+<option value="Antigua &amp; Deps">Antigua &amp; Deps</option>
+<option value="Argentina">Argentina</option>
+<option value="Armenia">Armenia</option>
+<option value="Australia">Australia</option>
+<option value="Austria">Austria</option>
+<option value="Azerbaijan">Azerbaijan</option>
+<option value="Bahamas">Bahamas</option>
+<option value="Bahrain">Bahrain</option>
+<option value="Bangladesh">Bangladesh</option>
+<option value="Barbados">Barbados</option>
+<option value="Belarus">Belarus</option>
+<option value="Belgium">Belgium</option>
+<option value="Belize">Belize</option>
+<option value="Benin">Benin</option>
+<option value="Bhutan">Bhutan</option>
+<option value="Bolivia">Bolivia</option>
+<option value="Bosnia Herzegovina">Bosnia Herzegovina</option>
+<option value="Botswana">Botswana</option>
+<option value="Brazil">Brazil</option>
+<option value="Brunei">Brunei</option>
+<option value="Bulgaria">Bulgaria</option>
+<option value="Burkina">Burkina</option>
+<option value="Burundi">Burundi</option>
+<option value="Cambodia">Cambodia</option>
+<option value="Cameroon">Cameroon</option>
+<option value="Canada">Canada</option>
+<option value="Cape Verde">Cape Verde</option>
+<option value="Central African Rep">Central African Rep</option>
+<option value="Chad">Chad</option>
+<option value="Chile">Chile</option>
+<option value="China">China</option>
+<option value="Colombia">Colombia</option>
+<option value="Comoros">Comoros</option>
+<option value="Congo">Congo</option>
+<option value="Congo {Democratic Rep}">Congo {Democratic Rep}</option>
+<option value="Costa Rica">Costa Rica</option>
+<option value="Croatia">Croatia</option>
+<option value="Cuba">Cuba</option>
+<option value="Cyprus">Cyprus</option>
+<option value="Czech Republic">Czech Republic</option>
+<option value="Denmark">Denmark</option>
+<option value="Djibouti">Djibouti</option>
+<option value="Dominica">Dominica</option>
+<option value="Dominican Republic">Dominican Republic</option>
+<option value="East Timor">East Timor</option>
+<option value="Ecuador">Ecuador</option>
+<option value="Egypt">Egypt</option>
+<option value="El Salvador">El Salvador</option>
+<option value="Equatorial Guinea">Equatorial Guinea</option>
+<option value="Eritrea">Eritrea</option>
+<option value="Estonia">Estonia</option>
+<option value="Ethiopia">Ethiopia</option>
+<option value="Fiji">Fiji</option>
+<option value="Finland">Finland</option>
+<option value="France">France</option>
+<option value="Gabon">Gabon</option>
+<option value="Gambia">Gambia</option>
+<option value="Georgia">Georgia</option>
+<option value="Germany">Germany</option>
+<option value="Ghana">Ghana</option>
+<option value="Greece">Greece</option>
+<option value="Grenada">Grenada</option>
+<option value="Guatemala">Guatemala</option>
+<option value="Guinea">Guinea</option>
+<option value="Guinea-Bissau">Guinea-Bissau</option>
+<option value="Guyana">Guyana</option>
+<option value="Haiti">Haiti</option>
+<option value="Honduras">Honduras</option>
+<option value="Hungary">Hungary</option>
+<option value="Iceland">Iceland</option>
+<option value="India">India</option>
+<option value="Indonesia">Indonesia</option>
+<option value="Iran">Iran</option>
+<option value="Iraq">Iraq</option>
+<option value="Ireland {Republic}">Ireland {Republic}</option>
+<option value="Israel">Israel</option>
+<option value="Italy">Italy</option>
+<option value="Ivory Coast">Ivory Coast</option>
+<option value="Jamaica">Jamaica</option>
+<option value="Japan">Japan</option>
+<option value="Jordan">Jordan</option>
+<option value="Kazakhstan">Kazakhstan</option>
+<option value="Kenya">Kenya</option>
+<option value="Kiribati">Kiribati</option>
+<option value="Korea North">Korea North</option>
+<option value="Korea South">Korea South</option>
+<option value="Kosovo">Kosovo</option>
+<option value="Kuwait">Kuwait</option>
+<option value="Kyrgyzstan">Kyrgyzstan</option>
+<option value="Laos">Laos</option>
+<option value="Latvia">Latvia</option>
+<option value="Lebanon">Lebanon</option>
+<option value="Lesotho">Lesotho</option>
+<option value="Liberia">Liberia</option>
+<option value="Libya">Libya</option>
+<option value="Liechtenstein">Liechtenstein</option>
+<option value="Lithuania">Lithuania</option>
+<option value="Luxembourg">Luxembourg</option>
+<option value="Macedonia">Macedonia</option>
+<option value="Madagascar">Madagascar</option>
+<option value="Malawi">Malawi</option>
+<option value="Malaysia">Malaysia</option>
+<option value="Maldives">Maldives</option>
+<option value="Mali">Mali</option>
+<option value="Malta">Malta</option>
+<option value="Marshall Islands">Marshall Islands</option>
+<option value="Mauritania">Mauritania</option>
+<option value="Mauritius">Mauritius</option>
+<option value="Mexico">Mexico</option>
+<option value="Micronesia">Micronesia</option>
+<option value="Moldova">Moldova</option>
+<option value="Monaco">Monaco</option>
+<option value="Mongolia">Mongolia</option>
+<option value="Montenegro">Montenegro</option>
+<option value="Morocco">Morocco</option>
+<option value="Mozambique">Mozambique</option>
+<option value="Myanmar, {Burma}">Myanmar, {Burma}</option>
+<option value="Namibia">Namibia</option>
+<option value="Nauru">Nauru</option>
+<option value="Nepal">Nepal</option>
+<option value="Netherlands">Netherlands</option>
+<option value="New Zealand">New Zealand</option>
+<option value="Nicaragua">Nicaragua</option>
+<option value="Niger">Niger</option>
+<option value="Nigeria">Nigeria</option>
+<option value="Norway">Norway</option>
+<option value="Oman">Oman</option>
+<option value="Pakistan">Pakistan</option>
+<option value="Palau">Palau</option>
+<option value="Panama">Panama</option>
+<option value="Papua New Guinea">Papua New Guinea</option>
+<option value="Paraguay">Paraguay</option>
+<option value="Peru">Peru</option>
+<option value="Philippines">Philippines</option>
+<option value="Poland">Poland</option>
+<option value="Portugal">Portugal</option>
+<option value="Qatar">Qatar</option>
+<option value="Romania">Romania</option>
+<option value="Russian Federation">Russian Federation</option>
+<option value="Rwanda">Rwanda</option>
+<option value="St Kitts &amp; Nevis">St Kitts &amp; Nevis</option>
+<option value="St Lucia">St Lucia</option>
+<option value="Saint Vincent &amp; the Grenadines">Saint Vincent &amp; the Grenadines</option>
+<option value="Samoa">Samoa</option>
+<option value="San Marino">San Marino</option>
+<option value="Sao Tome &amp; Principe">Sao Tome &amp; Principe</option>
+<option value="Saudi Arabia">Saudi Arabia</option>
+<option value="Senegal">Senegal</option>
+<option value="Serbia">Serbia</option>
+<option value="Seychelles">Seychelles</option>
+<option value="Sierra Leone">Sierra Leone</option>
+<option value="Singapore">Singapore</option>
+<option value="Slovakia">Slovakia</option>
+<option value="Slovenia">Slovenia</option>
+<option value="Solomon Islands">Solomon Islands</option>
+<option value="Somalia">Somalia</option>
+<option value="South Africa">South Africa</option>
+<option value="South Sudan">South Sudan</option>
+<option value="Spain">Spain</option>
+<option value="Sri Lanka">Sri Lanka</option>
+<option value="Sudan">Sudan</option>
+<option value="Suriname">Suriname</option>
+<option value="Swaziland">Swaziland</option>
+<option value="Sweden">Sweden</option>
+<option value="Switzerland">Switzerland</option>
+<option value="Syria">Syria</option>
+<option value="Taiwan">Taiwan</option>
+<option value="Tajikistan">Tajikistan</option>
+<option value="Tanzania">Tanzania</option>
+<option value="Thailand">Thailand</option>
+<option value="Togo">Togo</option>
+<option value="Tonga">Tonga</option>
+<option value="Trinidad &amp; Tobago">Trinidad &amp; Tobago</option>
+<option value="Tunisia">Tunisia</option>
+<option value="Turkey">Turkey</option>
+<option value="Turkmenistan">Turkmenistan</option>
+<option value="Tuvalu">Tuvalu</option>
+<option value="Uganda">Uganda</option>
+<option value="Ukraine">Ukraine</option>
+<option value="United Arab Emirates">United Arab Emirates</option>
+<option value="United Kingdom">United Kingdom</option>
+<option value="Uruguay">Uruguay</option>
+<option value="Uzbekistan">Uzbekistan</option>
+<option value="Vanuatu">Vanuatu</option>
+<option value="Vatican City">Vatican City</option>
+<option value="Venezuela">Venezuela</option>
+<option value="Vietnam">Vietnam</option>
+<option value="Yemen">Yemen</option>
+<option value="Zambia">Zambia</option>
+<option value="Zimbabwe">Zimbabwe</option>
+</select></div>
+</div>
+
+
+
+
+      <!--Payment button -->
+       <label class="col-md-4 control-label" for="">&nbsp;</label>
+      <input type="submit" value="Pay Now" name="submit" class="btn-danger"/></fieldset>
+    </form>
+ 
